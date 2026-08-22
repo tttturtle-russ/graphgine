@@ -1,0 +1,24 @@
+# A pure command+scatter graph. Because it contains no agent/human nodes it
+# runs to completion with zero LLM involvement — the CLI drives it entirely.
+name: pipeline-demo
+nodes:
+  - id: gen
+    type: command
+    command: ["sh", "-c", "echo '{\"nums\": [1,2,3,4,5]}'"]
+    output_schema:
+      type: object
+      required: [nums]
+
+  - id: square            # scatter: one instance per number
+    type: command
+    deps: [gen]
+    foreach: ${gen.output.nums}
+    command: ["sh", "-c", "echo \"{\\\"sq\\\": $((GRAPHGINE_ITEM * GRAPHGINE_ITEM))}\""]
+    output_schema:
+      type: object
+      required: [sq]
+
+  - id: report            # gather: receives the survivor array
+    type: command
+    deps: [square]
+    command: ["sh", "-c", "cat \"$GRAPHGINE_INPUT_DIR/square/output.json\""]

@@ -1,0 +1,59 @@
+# Binary-triage demo (the plan's first demo domain).
+#
+# Runnable prerequisites:
+#   - Set $TARGET to a binary path:  TARGET=/bin/ls graphgine init examples/binary-demo/graph.yaml
+#   - `analyze` (agent) and `review` (human) require a driving coding agent
+#     (see README "Driving the graph"). `recon`/`sink-scan`/`report` are pure,
+#     deterministic command nodes and run with zero LLM.
+#
+# Illustrates all three node types + a data-driven scatter over discovered
+# candidates + a human gate + gather.
+name: binary-triage
+nodes:
+  - id: recon
+    type: command
+    command: ["sh", "-c", "printf '{\"target\":\"%s\",\"info\":\"%s\"}' \"$TARGET\" \"$(file -b \"$TARGET\" 2>/dev/null | tr -d '\"')\""]
+    output_schema:
+      type: object
+      required: [target]
+
+  - id: sink-scan
+    type: command
+    deps: [recon]
+    # Emit candidate sinks as a JSON array. Here we scan the dynamic symbol
+    # table for classic dangerous libc calls; adapt to your tooling.
+    command: ["sh", "-c", "cands=$(nm -D \"$TARGET\" 2>/dev/null | grep -oE '\\b(strcpy|strcat|sprintf|gets|system|memcpy)\\b' | sort -u | sed 's/.*/\"&\"/' | paste -sd, -); printf '{\"candidates\": [%s]}' \"$cands\""]
+    output_schema:
+      type: object
+      required: [candidates]
+
+  - id: analyze
+    type: agent
+    deps: [sink-scan]
+    foreach: ${sink-scan.output.candidates}   # scatter: one sub-agent per candidate
+    input:
+      candidate: "${item}"
+    skills: [memory-corruption-triage]
+    tools: [read, bash]
+    prompt: |
+      Triage the single candidate sink provided in your input for a
+      memory-corruption vulnerability. Follow the memory-corruption-triage
+      skill and return the structured verdict it specifies.
+    output_schema:
+      type: object
+      required: [verdict]
+
+  - id: review
+    type: human
+    deps: [analyze]
+    prompt: |
+      Review the gathered per-candidate verdicts (survivors of the analyze
+      scatter). Approve to accept the findings, or reject to discard them.
+    output_schema:
+      type: object
+      required: [decision]
+
+  - id: report
+    type: command
+    deps: [review]
+    command: ["sh", "-c", "cat \"$GRAPHGINE_INPUT_DIR/review/output.json\""]

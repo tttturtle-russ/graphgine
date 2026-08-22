@@ -1,0 +1,10 @@
+# Packaged form of the pipeline demo, using explicit topology: graph.yaml
+# declares the nodes and their edges; each node's behavior lives in
+# nodes/<id>/node.yaml. Pure command + scatter — runs standalone, zero LLM.
+name: pipeline-pkg-demo
+nodes:
+  - id: gen
+  - id: square
+    deps: [gen]
+  - id: report
+    deps: [square]

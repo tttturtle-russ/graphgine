@@ -1,0 +1,2 @@
+type: command
+command: ["sh", "-c", "cat \"$GRAPHGINE_INPUT_DIR/square/output.json\""]

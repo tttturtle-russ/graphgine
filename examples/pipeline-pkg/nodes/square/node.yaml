@@ -1,0 +1,4 @@
+type: command
+foreach: ${gen.output.nums}
+command: ["sh", "-c", "echo \"{\\\"sq\\\": $((GRAPHGINE_ITEM * GRAPHGINE_ITEM))}\""]
+output_schema: { type: object, required: [sq] }
